@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% block title %}{{ coin.symbol if coin else 'Prediction' }} — TJ's Trading{% endblock %}
+{% block page_title %}Prediction Detail{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <a href="{{ url_for('predictions.list_predictions') }}" style="color:var(--text-dim);font-size:12px;display:flex;align-items:center;gap:4px;margin-bottom:8px">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Back to Predictions
+    </a>
+    <h1>{{ coin.symbol if coin else '???' }} <span style="font-weight:400;font-size:16px;color:var(--text-dim)">{{ coin.name if coin else '' }}</span></h1>
+    <p>Prediction #{{ pred.id }} &bull; {{ pred.created_at.strftime('%d %b %Y, %H:%M UTC') }}</p>
+  </div>
+  <div class="verdict-tag {{ pred.verdict }}" style="font-size:13px;padding:8px 16px">
+    {% if pred.verdict == 'strong' %}STRONG BUY{% elif pred.verdict == 'moderate' %}MODERATE{% else %}WEAK / SKIP{% endif %}
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start">
+
+  <!-- LEFT -->
+  <div>
+    <!-- TRADE SETUP -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <div class="card-title">Trade Setup</div>
+        {% if coin %}
+        <span class="card-badge {% if coin.category == 'forex' %}badge-blue{% elif coin.category == 'commodity' %}badge-gold{% else %}badge-dim{% endif %}">
+          {{ coin.category | upper if coin.category else 'CRYPTO' }}
+        </span>
+        {% endif %}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="pred-data-cell"><div class="data-label">Current Price</div><div class="data-value">${{ coin.price_usd | format_price if coin else '--' }}</div></div>
+        <div class="pred-data-cell"><div class="data-label">24H Change</div>
+          <div class="data-value {% if coin and coin.change_24h >= 0 %}green{% else %}red{% endif %}">
+            {{ "%+.2f"|format(coin.change_24h) if coin else '--' }}%
+          </div>
+        </div>
+        <div class="pred-data-cell"><div class="data-label">Entry Low</div><div class="data-value blue">${{ pred.entry_low | format_price if pred.entry_low else '--' }}</div></div>
+        <div class="pred-data-cell"><div class="data-label">Entry High</div><div class="data-value blue">${{ pred.entry_high | format_price if pred.entry_high else '--' }}</div></div>
+        <div class="pred-data-cell"><div class="data-label">Target Price</div><div class="data-value green">${{ pred.target_price | format_price if pred.target_price else '--' }}</div></div>
+        <div class="pred-data-cell"><div class="data-label">Stop Loss</div><div class="data-value red">${{ pred.stop_loss | format_price if pred.stop_loss else '--' }}</div></div>
+        <div class="pred-data-cell"><div class="data-label">Profit Potential</div>
+          <div class="data-value gold">{% if pred.profit_potential_min %}{{ pred.profit_potential_min|int }}–{{ pred.profit_potential_max|int }}%{% else %}--{% endif %}</div>
+        </div>
+        <div class="pred-data-cell"><div class="data-label">Leverage</div><div class="data-value blue">{{ pred.recommended_leverage or '--' }}</div></div>
+      </div>
+      {% if pred.leverage_note %}<p style="font-size:12px;color:var(--text-dim);margin-top:12px">{{ pred.leverage_note }}</p>{% endif %}
+    </div>
+
+    {% if pred.summary %}
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><div class="card-title">AI Analysis</div></div>
+      <p style="font-size:13px;color:var(--text-dim);line-height:1.7">{{ pred.summary }}</p>
+    </div>
+    {% endif %}
+
+    {% set ta = pred.ta %}
+    {% if ta %}
+    <!-- TECHNICAL ANALYSIS SECTION -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <div class="card-title">Technical Analysis</div>
+        {% set ov = ta.overall %}
+        <span class="card-badge {% if ov.label == 'bullish' %}badge-green{% elif ov.label == 'bearish' %}badge-red{% else %}badge-dim{% endif %}"
+              style="font-size:11px">
+          {{ ov.label | upper }} &bull; {{ ov.bullish_pct }}B / {{ ov.bearish_pct }}Be / {{ ov.neutral_pct }}N
+        </span>
+      </div>
+      <p style="font-size:11px;color:var(--text-dim);margin-bottom:14px">
+        Based on {{ ta.candle_count }} candles from CoinGecko (90-day window)
+      </p>
+
+      {% set ind = ta.indicators %}
+      {% set badges = [
+        ("RSI",                ind.rsi,               "RSI " ~ (ind.rsi.value | string if ind.rsi.value else "N/A")),
+        ("MACD",               ind.macd,              "MACD"),
+        ("Bollinger Bands",    ind.bollinger,         "BB"),
+        ("EMA Cross (20/50)",  ind.ema_cross,         "EMA " ~ (ind.ema_cross.ema20 | round(4) | string if ind.ema_cross.ema20 else "N/A")),
+        ("Volume Trend",       ind.volume,            "VOL"),
+        ("Support / Resistance", ind.support_resistance, "S/R"),
+      ] %}
+
+      <div style="display:flex;flex-direction:column;gap:10px">
+        {% for label, data, short in badges %}
+        {% if data %}
+        <div style="display:flex;align-items:flex-start;gap:10px">
+          <span class="ta-badge ta-{{ data.signal }}" style="min-width:76px;text-align:center;flex-shrink:0">
+            {% if data.signal == 'bullish' %}
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:2px"><polyline points="18 15 12 9 6 15"/></svg>
+            {% elif data.signal == 'bearish' %}
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:2px"><polyline points="6 9 12 15 18 9"/></svg>
+            {% else %}
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:2px"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            {% endif %}
+            {{ data.signal | upper }}
+          </span>
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px">{{ label }}</div>
+            <div style="font-size:11px;color:var(--text-dim)">{{ data.note }}</div>
+          </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    <!-- END TA -->
+    {% elif coin and coin.category not in ('forex', 'commodity') %}
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><div class="card-title">Technical Analysis</div></div>
+      <p style="font-size:12px;color:var(--text-dim);text-align:center;padding:12px">
+        TA data unavailable — CoinGecko returned no candles for this coin.
+      </p>
+    </div>
+    {% elif coin and coin.category in ('forex', 'commodity') %}
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><div class="card-title">Technical Analysis</div></div>
+      <p style="font-size:12px;color:var(--text-dim);text-align:center;padding:12px">
+        TA not available for {{ coin.category }} assets — crypto only.
+      </p>
+    </div>
+    {% endif %}
+
+    <!-- MARK OUTCOME -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">{% if pred.outcome %}Outcome Recorded{% else %}Mark Outcome{% endif %}</div>
+      </div>
+      {% if pred.outcome %}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div class="pred-data-cell"><div class="data-label">Result</div>
+          <div><span class="outcome-pill {{ pred.outcome.result }}">{{ pred.outcome.result | replace('_',' ') | upper }}</span></div>
+        </div>
+        {% if pred.outcome.actual_profit_pct is not none %}
+        <div class="pred-data-cell"><div class="data-label">Actual P&L</div>
+          <div class="data-value {% if pred.outcome.actual_profit_pct >= 0 %}green{% else %}red{% endif %}">
+            {{ "%+.2f"|format(pred.outcome.actual_profit_pct) }}%
+          </div>
+        </div>
+        {% endif %}
+        {% if pred.outcome.exit_price %}
+        <div class="pred-data-cell"><div class="data-label">Exit Price</div><div class="data-value">${{ pred.outcome.exit_price | format_price }}</div></div>
+        {% endif %}
+        {% if pred.outcome.hours_to_outcome %}
+        <div class="pred-data-cell"><div class="data-label">Duration</div><div class="data-value">{{ pred.outcome.hours_to_outcome|int }}h</div></div>
+        {% endif %}
+      </div>
+      {% if pred.outcome.notes %}<p style="font-size:12px;color:var(--text-dim)">{{ pred.outcome.notes }}</p>{% endif %}
+      {% else %}
+      <form method="POST" action="{{ url_for('outcomes.mark_outcome', pred_id=pred.id) }}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label">Result</label>
+            <select name="result" class="form-select" required>
+              <option value="">-- Select outcome --</option>
+              <option value="hit_target">Hit Target</option>
+              <option value="stopped_out">Stopped Out</option>
+              <option value="partial">Partial Profit</option>
+              <option value="missed">Missed Entry</option>
+              <option value="ongoing">Still Ongoing</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Actual P&L %</label>
+            <input type="number" step="0.01" name="actual_profit_pct" class="form-input" placeholder="-5.2 or +42.0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Exit Price</label>
+            <input type="number" step="any" name="exit_price" class="form-input" placeholder="optional">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Hours to Outcome</label>
+            <input type="number" step="0.5" name="hours_to_outcome" class="form-input" placeholder="optional">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notes</label>
+            <input type="text" name="notes" class="form-input" placeholder="optional — feeds ML training">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Record Outcome</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><div class="card-title">Meta Score</div></div>
+      <div style="font-size:48px;font-weight:800;color:var(--text);text-align:center;padding:12px 0;line-height:1">
+        {{ pred.meta_score|int if pred.meta_score else 0 }}
+      </div>
+      <div class="meta-bar-track" style="height:6px">
+        <div class="meta-bar-fill {% if pred.meta_score and pred.meta_score >= 70 %}strong{% elif pred.meta_score and pred.meta_score >= 50 %}moderate{% else %}weak{% endif %}"
+             style="width:{{ pred.meta_score or 0 }}%"></div>
+      </div>
+    </div>
+
+    {% if pred.sentiment_bullish %}
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><div class="card-title">Sentiment</div></div>
+      <div style="font-size:18px;font-weight:700;text-align:center;padding:8px 0;color:{% if pred.sentiment_label == 'bullish' %}var(--green){% elif pred.sentiment_label == 'bearish' %}var(--red){% else %}var(--text-dim){% endif %}">
+        {{ pred.sentiment_label | upper if pred.sentiment_label else '--' }}
+      </div>
+      <div class="sent-bar" style="height:8px;border-radius:4px;margin-bottom:8px">
+        <div class="sent-bull" style="width:{{ pred.sentiment_bullish }}%"></div>
+        <div class="sent-neut" style="width:{{ pred.sentiment_neutral or 0 }}%"></div>
+        <div class="sent-bear" style="width:{{ pred.sentiment_bearish }}%"></div>
+      </div>
+      <div class="sent-nums">
+        <span class="bull">{{ pred.sentiment_bullish|int }}%</span>
+        <span class="neut">{{ pred.sentiment_neutral|int if pred.sentiment_neutral else 0 }}%</span>
+        <span class="bear">{{ pred.sentiment_bearish|int }}%</span>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><div class="card-title">ML Confidence</div></div>
+      {% if pred.ml_confidence is not none %}
+        {% set pct = (pred.ml_confidence * 100)|int %}
+        <div style="font-size:32px;font-weight:800;text-align:center;padding:12px 0;line-height:1;color:{% if pct >= 70 %}var(--green){% elif pct >= 50 %}var(--gold){% else %}var(--red){% endif %}">
+          {{ pct }}%
+        </div>
+        <p style="font-size:11px;color:var(--text-dim);text-align:center">Based on {{ pred.ml_confidence|round(3) }} model score</p>
+      {% else %}
+        <p style="font-size:12px;color:var(--text-dim);text-align:center;padding:16px">No model yet. Mark outcomes to train.</p>
+      {% endif %}
+    </div>
+
+    {% if coin %}
+    <div class="card">
+      <div class="card-header"><div class="card-title">Market Data</div></div>
+      <div class="ml-stat-row"><span>CMC Rank</span><strong>#{{ coin.cmc_rank if coin.cmc_rank else '--' }}</strong></div>
+      <div class="ml-stat-row"><span>Market Cap</span><strong>{{ coin.market_cap | fmt_mcap if coin.market_cap else '--' }}</strong></div>
+      <div class="ml-stat-row"><span>Volume 24H</span><strong>{{ coin.volume_24h | fmt_mcap if coin.volume_24h else '--' }}</strong></div>
+      <div class="ml-stat-row"><span>1H Change</span>
+        <strong class="{% if coin.change_1h and coin.change_1h >= 0 %}green{% else %}red{% endif %}">
+          {{ "%+.2f"|format(coin.change_1h) if coin.change_1h else '--' }}%
+        </strong>
+      </div>
+      <div class="ml-stat-row"><span>7D Change</span>
+        <strong class="{% if coin.change_7d and coin.change_7d >= 0 %}green{% else %}red{% endif %}">
+          {{ "%+.2f"|format(coin.change_7d) if coin.change_7d else '--' }}%
+        </strong>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

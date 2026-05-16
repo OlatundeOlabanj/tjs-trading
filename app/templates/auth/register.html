@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block auth_content %}
+<div class="auth-card">
+  <div class="auth-logo">
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="TJ Trading" class="logo-img">
+    <div class="logo-text-group">
+      <span class="logo-name">TJ<span>'s</span> Trading</span>
+      <span class="logo-tag">AI Predictor</span>
+    </div>
+  </div>
+
+  <h1 class="auth-title">Create account</h1>
+  <p class="auth-sub">Start trading with AI-powered signals</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <form method="POST">
+    <div class="form-group">
+      <label class="form-label">Username</label>
+      <input type="text" name="username" class="form-input"
+             placeholder="Choose a username" required autofocus>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Email</label>
+      <input type="email" name="email" class="form-input"
+             placeholder="Enter your email" required>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input type="password" name="password" class="form-input"
+             placeholder="Minimum 8 characters" required>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Confirm Password</label>
+      <input type="password" name="confirm_password" class="form-input"
+             placeholder="Repeat your password" required>
+    </div>
+    <button type="submit" class="btn btn-primary btn-lg"
+            style="width:100%;justify-content:center;margin-top:4px">
+      Create Account
+    </button>
+  </form>
+
+  <div class="auth-divider"></div>
+  <div class="auth-footer">
+    Already have an account? <a href="{{ url_for('auth.login_page') }}">Sign in</a>
+  </div>
+</div>
+{% endblock %}

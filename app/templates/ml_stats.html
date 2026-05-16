@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}ML Engine — TJ's Trading{% endblock %}
+{% block page_title %}ML Engine{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1>ML Engine</h1>
+    <p>Self-improving model trained on your marked trade outcomes</p>
+  </div>
+  <form method="POST" action="{{ url_for('ml.trigger_train') }}">
+    <input type="hidden" name="force" value="1">
+    <button type="submit" class="btn btn-primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+      Train Model
+    </button>
+  </form>
+</div>
+
+<!-- MODEL STATUS -->
+{% if info.ready %}
+<div class="alert alert-success">
+  Model active &mdash; trained on <strong>{{ info.n_samples }}</strong> samples &mdash;
+  accuracy <strong>{{ info.train_accuracy | pct }}</strong>
+  {% if info.cv_mean %}&mdash; CV <strong>{{ info.cv_mean | pct }}</strong> &plusmn; {{ info.cv_std | pct }}{% endif %}
+  &mdash; last trained {{ info.trained_at[:10] if info.trained_at else '?' }}
+</div>
+{% else %}
+<div class="alert alert-info">
+  No model yet. Mark at least <strong>{{ info.min_samples }}</strong> trade outcomes, then click Train Model.
+</div>
+{% endif %}
+
+<!-- TOP GRID -->
+<div class="ml-grid">
+
+  <!-- OUTCOME STATS -->
+  <div class="card">
+    <div class="card-header"><div class="card-title">Outcome Statistics</div></div>
+    {% set os = info.outcome_stats %}
+    <div class="ml-stat-row"><span>Total Outcomes</span><strong>{{ os.total }}</strong></div>
+    <div class="ml-stat-row"><span>Resolved</span><strong>{{ os.resolved }}</strong></div>
+    <div class="ml-stat-row"><span>Hit Target</span><strong class="green">{{ os.hit_target }}</strong></div>
+    <div class="ml-stat-row"><span>Partial Win</span><strong style="color:var(--gold)">{{ os.partial }}</strong></div>
+    <div class="ml-stat-row"><span>Stopped Out</span><strong class="red">{{ os.stopped_out }}</strong></div>
+    <div class="ml-stat-row"><span>Missed</span><strong style="color:var(--text-dim)">{{ os.missed }}</strong></div>
+    <div class="ml-stat-row"><span>Ongoing</span><strong style="color:var(--blue)">{{ os.ongoing }}</strong></div>
+    <div style="height:1px;background:var(--border);margin:8px 0"></div>
+    <div class="ml-stat-row"><span>Win Rate</span>
+      <strong class="{% if os.win_rate >= 60 %}green{% elif os.win_rate >= 40 %}gold{% else %}red{% endif %}">
+        {{ os.win_rate }}%
+      </strong>
+    </div>
+    {% if os.avg_profit_pct is not none %}
+    <div class="ml-stat-row"><span>Avg P&L</span>
+      <strong class="{% if os.avg_profit_pct >= 0 %}green{% else %}red{% endif %}">
+        {{ "%+.2f"|format(os.avg_profit_pct) }}%
+      </strong>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- MODEL STATS -->
+  <div class="card">
+    <div class="card-header"><div class="card-title">Model Performance</div></div>
+    {% if info.ready %}
+    <div class="ml-stat-row"><span>Train Accuracy</span>
+      <strong class="{% if info.train_accuracy >= 0.7 %}green{% elif info.train_accuracy >= 0.5 %}gold{% else %}red{% endif %}">
+        {{ info.train_accuracy | pct }}
+      </strong>
+    </div>
+    {% if info.cv_mean %}
+    <div class="ml-stat-row"><span>CV Accuracy</span>
+      <strong class="{% if info.cv_mean >= 0.7 %}green{% elif info.cv_mean >= 0.5 %}gold{% else %}red{% endif %}">
+        {{ info.cv_mean | pct }}
+      </strong>
+    </div>
+    <div class="ml-stat-row"><span>CV Std Dev</span><strong style="color:var(--text-dim)">&plusmn;{{ info.cv_std | pct }}</strong></div>
+    {% endif %}
+    <div class="ml-stat-row"><span>Training Samples</span><strong>{{ info.n_samples }}</strong></div>
+    <div class="ml-stat-row"><span>Wins in Training</span><strong class="green">{{ info.n_positive }}</strong></div>
+    <div class="ml-stat-row"><span>Losses in Training</span><strong class="red">{{ info.n_negative }}</strong></div>
+    <div style="height:1px;background:var(--border);margin:8px 0"></div>
+    <div class="ml-stat-row"><span>Auto-retrain every</span><strong>{{ info.retrain_threshold }} outcomes</strong></div>
+    <div class="ml-stat-row"><span>Retrain needed?</span>
+      <strong class="{% if info.needs_retrain %}gold{% else %}green{% endif %}">
+        {{ 'YES' if info.needs_retrain else 'NO' }}
+      </strong>
+    </div>
+    {% else %}
+    <p style="color:var(--text-dim);font-size:13px;text-align:center;padding:24px">
+      Mark <strong style="color:var(--text)">{{ info.min_samples }}</strong> outcomes to enable training.
+    </p>
+    {% endif %}
+  </div>
+
+  <!-- CONFUSION MATRIX -->
+  {% if info.ready and info.confusion_matrix %}
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Confusion Matrix</div>
+      <span class="card-badge badge-dim">Training set</span>
+    </div>
+    {% set cm = info.confusion_matrix %}
+    <div class="cm-grid">
+      <div class="cm-label-corner"></div>
+      <div class="cm-col-label">PRED LOSS</div>
+      <div class="cm-col-label">PRED WIN</div>
+      <div class="cm-row-label">ACTUAL LOSS</div>
+      <div class="cm-cell correct">{{ cm[0][0] if cm|length > 0 else 0 }}<span>TN</span></div>
+      <div class="cm-cell wrong">{{ cm[0][1] if cm|length > 0 and cm[0]|length > 1 else 0 }}<span>FP</span></div>
+      <div class="cm-row-label">ACTUAL WIN</div>
+      <div class="cm-cell wrong">{{ cm[1][0] if cm|length > 1 else 0 }}<span>FN</span></div>
+      <div class="cm-cell correct">{{ cm[1][1] if cm|length > 1 and cm[1]|length > 1 else 0 }}<span>TP</span></div>
+    </div>
+    <div style="display:flex;gap:16px;margin-top:8px;font-size:12px;color:var(--text-dim)">
+      <span><span style="display:inline-block;width:8px;height:8px;background:var(--green);border-radius:2px;margin-right:4px"></span>Correct</span>
+      <span><span style="display:inline-block;width:8px;height:8px;background:var(--red);border-radius:2px;margin-right:4px"></span>Wrong</span>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- FEATURE IMPORTANCES -->
+{% if info.ready and info.feature_importances %}
+<div class="page-header" style="margin-bottom:12px;margin-top:8px">
+  <div class="card-title">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    Feature Importances
+  </div>
+  <span class="card-badge badge-dim">{{ info.feature_importances|length }} features</span>
+</div>
+<div class="table-wrap" style="margin-bottom:24px">
+  {% for name, score in info.feature_importances %}
+  <div class="fi-row">
+    <div class="fi-name">{{ name | upper | replace('_', ' ') }}</div>
+    <div class="fi-bar-wrap">
+      <div class="fi-bar" style="width:{{ [score * 500, 100]|min }}%"></div>
+    </div>
+    <div class="fi-score">{{ "%.3f"|format(score) }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- TRAINING PROGRESS -->
+<div class="page-header" style="margin-bottom:12px;margin-top:8px">
+  <div class="card-title">Training Progress</div>
+</div>
+<div class="card">
+  {% set os = info.outcome_stats %}
+  {% set needed = info.min_samples %}
+  {% set resolved = os.resolved %}
+  {% set pct_done = [[((resolved / needed) * 100), 100]|min, 0]|max %}
+  <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-dim);margin-bottom:8px">
+    <span>Outcomes recorded: <strong style="color:var(--text)">{{ resolved }}</strong></span>
+    <span>Minimum needed: <strong style="color:var(--text)">{{ needed }}</strong></span>
+  </div>
+  <div class="pt-bar-track">
+    <div class="pt-bar-fill {% if resolved >= needed %}done{% endif %}" style="width:{{ pct_done }}%"></div>
+  </div>
+  <p style="font-size:12px;color:var(--text-dim);margin-top:10px">
+    {% if resolved >= needed %}
+      Training threshold reached. Click Train Model to build or update the model.
+    {% else %}
+      Mark {{ needed - resolved }} more outcome{{ 's' if (needed - resolved) != 1 else '' }} to unlock training.
+    {% endif %}
+  </p>
+</div>
+{% endblock %}

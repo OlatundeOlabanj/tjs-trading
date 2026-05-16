@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+instance/
+*.db
+.venv/
+venv/
+app/ml/models/*.pkl
+app/ml/models/*.joblib
+migrations/versions/
+*.egg-info/
+.DS_Store

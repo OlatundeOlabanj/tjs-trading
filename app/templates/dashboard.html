@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — TJ's Trading{% endblock %}
+{% block page_title %}Market Scanner{% endblock %}
+
+{% block content %}
+
+<!-- STATS ROW -->
+<div class="stats-row" id="metricsStrip">
+  {% if last_session and last_session.total_market_cap %}
+  <div class="stat-pill">
+    <div class="stat-label">GLOBAL MCAP</div>
+    <div class="stat-value">{{ last_session.total_market_cap | fmt_mcap }}</div>
+  </div>
+  <div class="stat-pill">
+    <div class="stat-label">24H VOLUME</div>
+    <div class="stat-value">${{ "%.2f"|format(last_session.total_volume_24h / 1e9) }}B</div>
+  </div>
+  <div class="stat-pill">
+    <div class="stat-label">BTC DOM.</div>
+    <div class="stat-value gold">{{ "%.1f"|format(last_session.btc_dominance) }}%</div>
+  </div>
+  {% endif %}
+  <div class="stat-pill">
+    <div class="stat-label">PREDICTIONS</div>
+    <div class="stat-value">{{ total_predictions }}</div>
+  </div>
+  <div class="stat-pill">
+    <div class="stat-label">MY TRADES</div>
+    <div class="stat-value">{{ total_trades }}</div>
+  </div>
+</div>
+
+<!-- SEARCH BAR -->
+<div class="search-bar">
+  <span class="search-icon">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+  </span>
+  <input type="text" id="searchInput" class="search-input"
+    placeholder="Search any asset — BTC, EURUSD, Gold, Ethereum, USDNGN...">
+  <span class="search-hint">Crypto &bull; FX &bull; Commodities</span>
+  <button class="btn btn-primary btn-sm" onclick="triggerSearch()">Analyze</button>
+</div>
+<div id="searchStatus" style="font-size:12px;color:var(--text-dim);margin:-16px 0 16px 0"></div>
+<div class="predictions-grid" id="searchResults"></div>
+
+<!-- SCAN CONTROLS -->
+<div class="page-header" style="margin-bottom:16px">
+  <div class="page-header-left">
+    <h1 style="font-size:16px">Market Scan</h1>
+    <p>Live gainers &amp; losers from CoinMarketCap &bull; $50M+ market cap filter active</p>
+  </div>
+  <button class="btn btn-primary" id="scanBtn" onclick="triggerScan()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+    Scan Market
+  </button>
+</div>
+
+<!-- STATUS BAR -->
+<div class="status-bar" id="statusBar">
+  <span class="status-icon" id="statusIcon">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+  </span>
+  <span id="statusText">
+    {% if last_session and last_session.status == 'complete' %}
+      Last scan #{{ last_session.id }} &mdash; {{ last_session.created_at.strftime('%d %b %Y, %H:%M UTC') }} &mdash; {{ last_session.coins|length }} coins loaded.
+    {% else %}
+      Ready. Click Scan Market to fetch live data and run AI analysis.
+    {% endif %}
+  </span>
+</div>
+
+<!-- PROGRESS LOG -->
+<div class="progress-log" id="progressLog"></div>
+
+<!-- TICKER -->
+<div class="ticker-bar">
+  <span class="ticker-label">LIVE</span>
+  <div class="ticker-scroll">
+    <div class="ticker-inner" id="tickerInner">
+      {% for coin in gainers + losers %}
+      <div class="ticker-item">
+        <span class="t-sym">{{ coin.symbol }}</span>
+        <span class="t-price">${{ coin.price_usd | format_price }}</span>
+        <span class="t-chg {% if coin.change_24h >= 0 %}pos{% else %}neg{% endif %}">
+          {{ "%+.2f"|format(coin.change_24h) }}%
+        </span>
+      </div>
+      {% else %}
+      <div class="ticker-item"><span class="t-sym" style="color:var(--text-dim)">-- SCAN TO LOAD --</span></div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- MOVERS -->
+{% if gainers or losers %}
+<div class="movers-grid" id="moversGrid">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+        Top Gainers
+      </div>
+      <span class="card-badge badge-green">24H</span>
+    </div>
+    {% for coin in gainers %}
+    <div class="mover-row" style="animation-delay:{{ loop.index0 * 0.06 }}s">
+      <span class="mover-rank">{{ loop.index }}</span>
+      <div class="coin-chip">{{ coin.symbol[:5] }}</div>
+      <div class="mover-info">
+        <div class="mover-name">{{ coin.name }}</div>
+        <div class="mover-sym">{{ coin.symbol }}</div>
+      </div>
+      <div class="mover-right">
+        <div class="mover-price">${{ coin.price_usd | format_price }}</div>
+        <div class="mover-chg pos">{{ "%+.2f"|format(coin.change_24h) }}%</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-linecap="round"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg>
+        Top Losers
+      </div>
+      <span class="card-badge badge-red">24H</span>
+    </div>
+    {% for coin in losers %}
+    <div class="mover-row" style="animation-delay:{{ loop.index0 * 0.06 }}s">
+      <span class="mover-rank">{{ loop.index }}</span>
+      <div class="coin-chip">{{ coin.symbol[:5] }}</div>
+      <div class="mover-info">
+        <div class="mover-name">{{ coin.name }}</div>
+        <div class="mover-sym">{{ coin.symbol }}</div>
+      </div>
+      <div class="mover-right">
+        <div class="mover-price">${{ coin.price_usd | format_price }}</div>
+        <div class="mover-chg neg">{{ "%+.2f"|format(coin.change_24h) }}%</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="empty-state" id="emptyMovers">
+  <div class="empty-icon">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+  </div>
+  <div class="empty-title">No Market Data</div>
+  <div class="empty-sub">Click Scan Market to load live gainers and losers</div>
+</div>
+{% endif %}
+
+<!-- AI PREDICTIONS -->
+<div id="predictionsSection" style="{% if not predictions %}display:none{% endif %}">
+  <div class="page-header" style="margin-bottom:16px;margin-top:8px">
+    <div class="page-header-left">
+      <h1 style="font-size:16px">AI Predictions</h1>
+      <p>Groq Llama 3.3 analysis &bull; ML confidence scoring</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="card-badge badge-dim" id="predCount">{{ predictions|length }}</span>
+      <a href="{{ url_for('predictions.list_predictions') }}" class="btn btn-ghost btn-sm">View All</a>
+    </div>
+  </div>
+
+  <div class="predictions-grid" id="predsGrid">
+    {% for pred in predictions %}
+    {% set coin = pred.coin %}
+    <div class="pred-card {{ pred.verdict }}" style="animation-delay:{{ loop.index0 * 0.06 }}s">
+      <div class="pred-card-accent"></div>
+      <div class="pred-card-body">
+        <div class="pred-head">
+          <div class="pred-coin-wrap">
+            <div class="pred-coin-icon">{{ coin.symbol[:5] if coin else '??' }}</div>
+            <div>
+              <div class="pred-coin-name">{{ coin.name if coin else '--' }}</div>
+              <div class="pred-coin-sym">{{ coin.symbol if coin else '' }}</div>
+            </div>
+          </div>
+          <div class="verdict-tag {{ pred.verdict }}">
+            {% if pred.verdict == 'strong' %}STRONG BUY{% elif pred.verdict == 'moderate' %}MODERATE{% else %}WEAK / SKIP{% endif %}
+          </div>
+        </div>
+
+        <div class="meta-bar-wrap">
+          <div class="meta-bar-labels"><span>META SCORE</span><span>{{ pred.meta_score|int if pred.meta_score else 0 }}/100</span></div>
+          <div class="meta-bar-track">
+            <div class="meta-bar-fill {% if pred.meta_score and pred.meta_score >= 70 %}strong{% elif pred.meta_score and pred.meta_score >= 50 %}moderate{% else %}weak{% endif %}"
+                 style="width:{{ pred.meta_score or 0 }}%"></div>
+          </div>
+        </div>
+
+        <div class="pred-data-grid">
+          <div class="pred-data-cell"><div class="data-label">Price</div><div class="data-value">${{ coin.price_usd | format_price if coin else '--' }}</div></div>
+          <div class="pred-data-cell"><div class="data-label">24H</div>
+            <div class="data-value {% if coin and coin.change_24h >= 0 %}green{% else %}red{% endif %}">
+              {{ "%+.2f"|format(coin.change_24h) if coin else '--' }}%
+            </div>
+          </div>
+          <div class="pred-data-cell"><div class="data-label">Entry</div><div class="data-value blue">${{ pred.entry_low | format_price if pred.entry_low else '--' }}</div></div>
+          <div class="pred-data-cell"><div class="data-label">Target</div><div class="data-value green">${{ pred.target_price | format_price if pred.target_price else '--' }}</div></div>
+          <div class="pred-data-cell"><div class="data-label">Stop</div><div class="data-value red">${{ pred.stop_loss | format_price if pred.stop_loss else '--' }}</div></div>
+          <div class="pred-data-cell"><div class="data-label">Profit</div>
+            <div class="data-value gold">
+              {% if pred.profit_potential_min %}{{ pred.profit_potential_min|int }}–{{ pred.profit_potential_max|int }}%{% else %}--{% endif %}
+            </div>
+          </div>
+        </div>
+
+        {% if pred.sentiment_bullish %}
+        <div class="sentiment-row">
+          <span class="sent-label">SENTIMENT</span>
+          <div class="sent-bar-wrap">
+            <div class="sent-bar">
+              <div class="sent-bull" style="width:{{ pred.sentiment_bullish }}%"></div>
+              <div class="sent-neut" style="width:{{ pred.sentiment_neutral or 0 }}%"></div>
+              <div class="sent-bear" style="width:{{ pred.sentiment_bearish }}%"></div>
+            </div>
+            <div class="sent-nums">
+              <span class="bull">{{ pred.sentiment_bullish|int }}% BULL</span>
+              <span class="neut">{{ pred.sentiment_neutral|int if pred.sentiment_neutral else 0 }}% NEUT</span>
+              <span class="bear">{{ pred.sentiment_bearish|int }}% BEAR</span>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+        <div class="leverage-row">
+          <div class="lev-info">
+            <div class="lev-label">Leverage</div>
+            <div class="lev-note">{{ pred.leverage_note or 'Futures/Margin only' }}</div>
+          </div>
+          <div class="lev-value">{{ pred.recommended_leverage or '1x' }}</div>
+        </div>
+
+        {% if pred.ml_confidence is not none %}
+        <div class="ml-conf-row">
+          {% set pct = (pred.ml_confidence * 100)|int %}
+          <span class="ml-conf-badge {% if pct >= 70 %}high{% elif pct >= 50 %}medium{% else %}low{% endif %}">
+            ML: {{ pct }}% confidence
+          </span>
+        </div>
+        {% else %}
+        <div class="ml-conf-row">
+          <span class="ml-conf-badge none">ML: N/A — mark outcomes to train</span>
+        </div>
+        {% endif %}
+
+        {% if pred.summary %}
+        <div class="pred-summary">{{ pred.summary }}</div>
+        {% endif %}
+
+        <div class="pred-actions">
+          <a href="{{ url_for('predictions.prediction_detail', pred_id=pred.id) }}" class="btn btn-ghost btn-sm">Detail</a>
+          <a href="{{ url_for('outcomes.list_outcomes') }}" class="btn btn-success btn-sm">Mark Outcome</a>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- RECENT SCANS -->
+{% if recent_sessions %}
+<div class="page-header" style="margin-bottom:12px;margin-top:8px">
+  <div class="page-header-left">
+    <h1 style="font-size:15px">Recent Scans</h1>
+  </div>
+</div>
+<div class="table-wrap" style="margin-bottom:24px">
+  <table class="data-table">
+    <thead>
+      <tr><th>ID</th><th>Time (UTC)</th><th>Status</th><th>Coins</th><th>Predictions</th><th>Market Cap</th></tr>
+    </thead>
+    <tbody>
+      {% for s in recent_sessions %}
+      <tr>
+        <td style="color:var(--text-dim)">#{{ s.id }}</td>
+        <td>{{ s.created_at.strftime('%d %b, %H:%M') }}</td>
+        <td>
+          <span class="card-badge {% if s.status == 'complete' %}badge-green{% elif s.status == 'failed' %}badge-red{% else %}badge-dim{% endif %}">
+            {{ s.status | upper }}
+          </span>
+        </td>
+        <td>{{ s.coins | length }}</td>
+        <td>{{ s.predictions | length }}</td>
+        <td>{{ s.total_market_cap | fmt_mcap if s.total_market_cap else '--' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Outcomes — TJ's Trading{% endblock %}
+{% block page_title %}Outcomes{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1>Outcomes</h1>
+    <p>Mark trade results &mdash; every outcome trains the ML model</p>
+  </div>
+</div>
+
+<!-- PENDING -->
+<div class="page-header" style="margin-bottom:12px">
+  <div class="card-title">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    Pending Outcomes
+  </div>
+  <span class="card-badge badge-dim">{{ pending|length }}</span>
+</div>
+
+{% if pending %}
+<div class="table-wrap" style="margin-bottom:28px">
+  <table class="data-table">
+    <thead><tr><th>Asset</th><th>Verdict</th><th>Score</th><th>Target</th><th>Leverage</th><th>Date</th><th></th></tr></thead>
+    <tbody>
+      {% for pred in pending %}
+      {% set coin = pred.coin %}
+      <tr>
+        <td>
+          <div style="font-weight:600">{{ coin.symbol if coin else '--' }}</div>
+          <div style="font-size:11px;color:var(--text-dim)">{{ coin.name if coin else '--' }}</div>
+        </td>
+        <td><span class="verdict-tag {{ pred.verdict }}" style="font-size:10px">{{ pred.verdict | upper if pred.verdict else '--' }}</span></td>
+        <td style="color:{% if pred.meta_score and pred.meta_score >= 70 %}var(--green){% elif pred.meta_score and pred.meta_score >= 50 %}var(--gold){% else %}var(--red){% endif %};font-weight:700">
+          {{ pred.meta_score|int if pred.meta_score else '--' }}
+        </td>
+        <td style="color:var(--green)">${{ pred.target_price | format_price if pred.target_price else '--' }}</td>
+        <td style="color:var(--blue);font-weight:700">{{ pred.recommended_leverage or '--' }}</td>
+        <td style="color:var(--text-dim);font-size:12px">{{ pred.created_at.strftime('%d %b %H:%M') }}</td>
+        <td><a href="{{ url_for('predictions.prediction_detail', pred_id=pred.id) }}" class="btn btn-success btn-sm">Mark</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state" style="margin-bottom:28px;padding:40px">
+  <div class="empty-title">No Pending Outcomes</div>
+  <div class="empty-sub">All predictions have been resolved</div>
+</div>
+{% endif %}
+
+<!-- RESOLVED -->
+{% if resolved %}
+<div class="page-header" style="margin-bottom:12px">
+  <div class="card-title">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+    Resolved
+  </div>
+  <span class="card-badge badge-green">{{ resolved|length }}</span>
+</div>
+<div class="table-wrap">
+  <table class="data-table">
+    <thead><tr><th>Asset</th><th>Result</th><th>P&L</th><th>Exit Price</th><th>Duration</th><th>Date</th></tr></thead>
+    <tbody>
+      {% for pred in resolved %}
+      {% set coin = pred.coin %}
+      <tr onclick="location.href='{{ url_for('predictions.prediction_detail', pred_id=pred.id) }}'" style="cursor:pointer">
+        <td>
+          <div style="font-weight:600">{{ coin.symbol if coin else '--' }}</div>
+          <div style="font-size:11px;color:var(--text-dim)">{{ coin.name if coin else '--' }}</div>
+        </td>
+        <td><span class="outcome-pill {{ pred.outcome.result }}">{{ pred.outcome.result | replace('_',' ') | upper }}</span></td>
+        <td>
+          {% if pred.outcome.actual_profit_pct is not none %}
+          <span style="color:{% if pred.outcome.actual_profit_pct >= 0 %}var(--green){% else %}var(--red){% endif %};font-weight:700">
+            {{ "%+.2f"|format(pred.outcome.actual_profit_pct) }}%
+          </span>
+          {% else %}--{% endif %}
+        </td>
+        <td>${{ pred.outcome.exit_price | format_price if pred.outcome.exit_price else '--' }}</td>
+        <td>{{ pred.outcome.hours_to_outcome|int if pred.outcome.hours_to_outcome else '--' }}{% if pred.outcome.hours_to_outcome %}h{% endif %}</td>
+        <td style="color:var(--text-dim);font-size:12px">{{ pred.outcome.recorded_at.strftime('%d %b %H:%M') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
