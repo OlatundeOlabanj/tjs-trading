@@ -149,11 +149,25 @@
       </div>
       {% if pred.outcome.notes %}<p style="font-size:12px;color:var(--text-dim)">{{ pred.outcome.notes }}</p>{% endif %}
       {% else %}
-      <form method="POST" action="{{ url_for('outcomes.mark_outcome', pred_id=pred.id) }}">
+
+      <!-- SCREENSHOT UPLOAD — AI-assisted outcome fill -->
+      <div id="screenshotUploadWrap" style="margin-bottom:20px">
+        <label class="form-label" style="margin-bottom:10px">Upload Trade Screenshot (optional)</label>
+        <div id="screenshotDropzone" class="screenshot-dropzone" onclick="document.getElementById('screenshotInput').click()">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <span id="screenshotLabel">Click to upload your Bybit closed-trade screenshot — AI will read it and pre-fill the form below</span>
+        </div>
+        <input type="file" id="screenshotInput" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="handleScreenshotUpload(this)">
+        <div id="screenshotStatus" style="font-size:12px;margin-top:8px;display:none"></div>
+      </div>
+
+      <form method="POST" action="{{ url_for('outcomes.mark_outcome', pred_id=pred.id) }}" id="outcomeForm">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
           <div class="form-group" style="grid-column:1/-1">
             <label class="form-label">Result</label>
-            <select name="result" class="form-select" required>
+            <select name="result" id="resultSelect" class="form-select" required>
               <option value="">-- Select outcome --</option>
               <option value="hit_target">Hit Target</option>
               <option value="stopped_out">Stopped Out</option>
@@ -164,11 +178,11 @@
           </div>
           <div class="form-group">
             <label class="form-label">Actual P&L %</label>
-            <input type="number" step="0.01" name="actual_profit_pct" class="form-input" placeholder="-5.2 or +42.0">
+            <input type="number" step="0.01" name="actual_profit_pct" id="pnlInput" class="form-input" placeholder="-5.2 or +42.0">
           </div>
           <div class="form-group">
             <label class="form-label">Exit Price</label>
-            <input type="number" step="any" name="exit_price" class="form-input" placeholder="optional">
+            <input type="number" step="any" name="exit_price" id="exitPriceInput" class="form-input" placeholder="optional">
           </div>
           <div class="form-group">
             <label class="form-label">Hours to Outcome</label>
@@ -176,7 +190,7 @@
           </div>
           <div class="form-group">
             <label class="form-label">Notes</label>
-            <input type="text" name="notes" class="form-input" placeholder="optional — feeds ML training">
+            <input type="text" name="notes" id="notesInput" class="form-input" placeholder="optional — feeds ML training">
           </div>
         </div>
         <button type="submit" class="btn btn-primary">Record Outcome</button>

@@ -379,3 +379,91 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
+
+/* ── SCREENSHOT-ASSISTED OUTCOME UPLOAD ───────────────────── */
+async function handleScreenshotUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const status = document.getElementById("screenshotStatus");
+  const label  = document.getElementById("screenshotLabel");
+  const zone   = document.getElementById("screenshotDropzone");
+
+  if (status) {
+    status.style.display = "block";
+    status.style.color = "var(--text-dim)";
+    status.textContent = "Reading screenshot with AI...";
+  }
+  if (label) label.textContent = "Analyzing " + file.name + "...";
+  if (zone) zone.classList.add("loading");
+
+  const formData = new FormData();
+  formData.append("screenshot", file);
+
+  try {
+    const res  = await fetch("/outcomes/scan-screenshot", { method: "POST", body: formData });
+    const data = await res.json();
+
+    if (zone) zone.classList.remove("loading");
+
+    if (!data.ok) {
+      if (status) { status.style.color = "var(--red)"; status.textContent = data.error || "Could not read screenshot."; }
+      if (label) label.textContent = "Click to upload your Bybit closed-trade screenshot — AI will read it and pre-fill the form below";
+      return;
+    }
+
+    const ex = data.extracted;
+
+    // Pre-fill form fields
+    const resultSelect = document.getElementById("resultSelect");
+    const pnlInput      = document.getElementById("pnlInput");
+    const exitPriceInput= document.getElementById("exitPriceInput");
+    const notesInput    = document.getElementById("notesInput");
+
+    if (resultSelect && ex.result) resultSelect.value = ex.result;
+    if (pnlInput && ex.pnl_pct !== null && ex.pnl_pct !== undefined) pnlInput.value = ex.pnl_pct;
+    if (exitPriceInput && ex.exit_price !== null && ex.exit_price !== undefined) exitPriceInput.value = ex.exit_price;
+    if (notesInput) {
+      const parts = [];
+      if (ex.symbol) parts.push(ex.symbol);
+      if (ex.side) parts.push(ex.side);
+      if (ex.notes) parts.push(ex.notes);
+      notesInput.value = parts.join(" — ") + " (AI-read from screenshot, " + (ex.confidence || "medium") + " confidence)";
+    }
+
+    if (status) {
+      status.style.color = "var(--green)";
+      status.textContent = `AI read the screenshot (${ex.confidence || "medium"} confidence) — review the fields below and submit.`;
+    }
+    if (label) label.textContent = "Screenshot analyzed — " + file.name;
+
+  } catch (err) {
+    if (zone) zone.classList.remove("loading");
+    if (status) { status.style.color = "var(--red)"; status.textContent = "Upload failed: " + err.message; }
+    if (label) label.textContent = "Click to upload your Bybit closed-trade screenshot — AI will read it and pre-fill the form below";
+  }
+}
+
+/* ── MOBILE SIDEBAR: close on outside click or nav item tap ──── */
+document.addEventListener("click", (e) => {
+  const sidebar = document.getElementById("sidebar");
+  const toggle  = document.querySelector(".sidebar-toggle");
+  if (!sidebar || !sidebar.classList.contains("open")) return;
+
+  const clickedInsideSidebar = sidebar.contains(e.target);
+  const clickedToggle        = toggle && toggle.contains(e.target);
+
+  if (!clickedInsideSidebar && !clickedToggle) {
+    sidebar.classList.remove("open");
+  }
+});
+
+// Close drawer automatically when a nav link is tapped (mobile UX)
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll(".sidebar .nav-item").forEach(link => {
+    link.addEventListener("click", () => {
+      const sidebar = document.getElementById("sidebar");
+      if (sidebar && window.innerWidth <= 900) sidebar.classList.remove("open");
+    });
+  });
+});

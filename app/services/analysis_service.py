@@ -1,5 +1,5 @@
 """
-Analysis Service — Groq (llama-3.3-70b-versatile, hardcoded)
+Analysis Service — Groq (openai/gpt-oss-120b, hardcoded)
 Asset-type aware: crypto, forex, commodity prompts with correct profit targets.
 """
 import json
@@ -11,7 +11,7 @@ from groq import Groq
 
 logger = logging.getLogger(__name__)
 
-GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_MODEL = "openai/gpt-oss-120b"
 
 CRYPTO_SYSTEM = """You are TJ's Crypto Trading Analyst. Analyze the given coin data and produce a trade signal.
 

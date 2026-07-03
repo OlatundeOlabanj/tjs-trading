@@ -1,10 +1,13 @@
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, current_app
 from flask_login import login_required
 from app import db
 from app.models import Prediction, Outcome, Coin
 from app.models.outcome import OUTCOME_RESULTS
 
 outcomes_bp = Blueprint("outcomes", __name__)
+
+ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp"}
+MAX_IMAGE_SIZE = 8 * 1024 * 1024  # 8MB
 
 
 @outcomes_bp.route("/")
@@ -15,6 +18,42 @@ def list_outcomes():
     resolved = (Prediction.query.filter(Prediction.outcome.has())
                 .order_by(Prediction.created_at.desc()).limit(50).all())
     return render_template("outcomes.html", pending=pending, resolved=resolved)
+
+
+@outcomes_bp.route("/scan-screenshot", methods=["POST"])
+@login_required
+def scan_screenshot():
+    """
+    Upload a Bybit (or any exchange) trade screenshot.
+    Groq vision model reads it and returns pre-fill data for the outcome form.
+    This does NOT save anything — the user must still confirm via /mark/<id>.
+    """
+    file = request.files.get("screenshot")
+    if not file or file.filename == "":
+        return jsonify({"ok": False, "error": "No screenshot uploaded."}), 400
+
+    if file.mimetype not in ALLOWED_IMAGE_TYPES:
+        return jsonify({"ok": False, "error": "Unsupported file type. Use PNG, JPG, or WEBP."}), 400
+
+    image_bytes = file.read()
+    if len(image_bytes) > MAX_IMAGE_SIZE:
+        return jsonify({"ok": False, "error": "Image too large. Max 8MB."}), 400
+
+    api_key = current_app.config.get("GROQ_API_KEY", "")
+    if not api_key:
+        return jsonify({"ok": False, "error": "GROQ_API_KEY not configured."}), 500
+
+    try:
+        from app.services.vision_service import VisionService
+        svc = VisionService(api_key)
+        result = svc.read_trade_screenshot(image_bytes, mime_type=file.mimetype)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Vision analysis failed: {e}"}), 500
+
+    if not result:
+        return jsonify({"ok": False, "error": "Could not read trade data from this screenshot. Try a clearer image or enter manually."}), 422
+
+    return jsonify({"ok": True, "extracted": result})
 
 
 @outcomes_bp.route("/mark/<int:pred_id>", methods=["POST"])

@@ -11,7 +11,7 @@ class BaseConfig:
     SCAN_LIMIT               = int(os.environ.get("SCAN_LIMIT", 10))
     MARKET_CAP_MIN           = int(os.environ.get("MARKET_CAP_MIN", 50_000_000))
     GROQ_API_KEY             = os.environ.get("GROQ_API_KEY", "")
-    GROQ_MODEL               = "llama-3.3-70b-versatile"
+    GROQ_MODEL               = "openai/gpt-oss-120b"
     AUTO_SCAN_ENABLED        = os.environ.get("AUTO_SCAN_ENABLED", "true").lower() == "true"
     AUTO_SCAN_INTERVAL_HOURS = int(os.environ.get("AUTO_SCAN_INTERVAL_HOURS", 6))
 

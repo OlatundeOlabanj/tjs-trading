@@ -2,12 +2,17 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager
+from flask_wtf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 from app.config import get_config
 
 db = SQLAlchemy()
 migrate = Migrate()
 login_manager = LoginManager()
+csrf = CSRFProtect()
+limiter = Limiter(key_func=get_remote_address, default_limits=["200 per hour"])
 
 
 def create_app():
@@ -18,6 +23,8 @@ def create_app():
     migrate.init_app(app, db)
     login_manager.init_app(app)
     login_manager.login_view = "auth.login_page"
+    csrf.init_app(app)
+    limiter.init_app(app)
 
     # Import models for Migrate
     from app.models import user, api_key, trade, scan_session, coin, prediction, outcome  # noqa
@@ -41,6 +48,22 @@ def create_app():
     app.register_blueprint(trading_bp,      url_prefix="/trading")
     app.register_blueprint(ml_bp,           url_prefix="/ml")
     app.register_blueprint(api_bp,          url_prefix="/api")
+
+    # ── CSRF exemptions ──────────────────────────────────────────
+    # These blueprints are called from JS via fetch() with JSON or
+    # multipart bodies — they never carry the hidden csrf_token field
+    # a classic <form> submit would. @login_required is the real
+    # security boundary for them, not CSRF tokens.
+    csrf.exempt(scan_bp)
+    csrf.exempt(search_bp)
+    csrf.exempt(trading_bp)
+    csrf.exempt(outcomes_bp)
+    csrf.exempt(ml_bp)
+
+    # ── Rate limiting on sensitive auth routes ───────────────────
+    # Login/register are the most common brute-force / bot target.
+    # Apply tighter limits here on top of the 200/hour global default.
+    limiter.limit("10 per minute")(auth_bp)
 
     from app.models.user import User
     @login_manager.user_loader
@@ -72,6 +95,16 @@ def create_app():
         if v >= 1e9:  return f"${v/1e9:.2f}B"
         if v >= 1e6:  return f"${v/1e6:.1f}M"
         return f"${v:,.0f}"
+
+    # ── Security headers ──────────────────────────────────────────
+    @app.after_request
+    def set_security_headers(response):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        if app.config.get("DEBUG") is False:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
 
     # Init scheduler
     if not app.config.get("TESTING"):

@@ -35,6 +35,7 @@
       <span class="card-badge badge-dim">Encrypted</span>
     </div>
     <form method="POST" action="{{ url_for('auth.add_api_key') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="form-group">
         <label class="form-label">Label</label>
         <input type="text" name="label" class="form-input" placeholder="e.g. Bybit Main" value="My Key">
@@ -94,6 +95,7 @@
           <td style="color:var(--text-dim)">{{ key.last_used.strftime('%d %b %H:%M') if key.last_used else '--' }}</td>
           <td>
             <form method="POST" action="{{ url_for('auth.delete_api_key', key_id=key.id) }}" onsubmit="return confirm('Remove this key?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-danger btn-sm">Remove</button>
             </form>
           </td>
